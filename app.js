@@ -1,9 +1,16 @@
-// Initialize Leaflet map with Satellite Imagery
-const initialCoords = [45.8150, 15.9819]; // Default coordinates (Zagreb / European terrain)
+// Initialize Leaflet map with Satellite Imagery & Zoom Locks
+const initialCoords = [45.8150, 15.9819]; 
 const map = L.map('map', {
   center: initialCoords,
   zoom: 13,
-  zoomControl: false // Minimalist UI optimized for mobile touch inputs
+  minZoom: 3,         // Prevents zooming out beyond the full world map
+  maxZoom: 18,        // Max satellite resolution
+  maxBounds: [       // Locks panning strictly to valid geographical coordinates
+    [-90, -180],
+    [90, 180]
+  ],
+  maxBoundsViscosity: 1.0, // Hard boundary lock (prevents rubber-banding off the map)
+  zoomControl: false
 });
 
 // Esri World Imagery (Satellite Layer)
@@ -22,9 +29,21 @@ let selectedUnitHex = null;
 let validMoveHighlights = [];
 let currentTargetHex = null;
 
+// Dynamic H3 Resolution Scale based on Map Zoom
+function getH3Resolution(zoom) {
+  if (zoom >= 14) return 8; // Tactical detail (~0.7 km² per hex)
+  if (zoom >= 12) return 7; // Medium scale (~5 km² per hex)
+  if (zoom >= 9)  return 6; // Regional scale (~36 km² per hex)
+  if (zoom >= 7)  return 5; // Strategic scale (~250 km² per hex)
+  return 4;                 // Global/Theater view (~1,700 km² per hex)
+}
+
 // Render Map Grid Overlay
 function renderHexGrid() {
   hexLayerGroup.clearLayers();
+
+  const currentZoom = map.getZoom();
+  const H3_RESOLUTION = getH3Resolution(currentZoom);
   
   const bounds = map.getBounds();
   const bboxPolygon = [
@@ -34,7 +53,11 @@ function renderHexGrid() {
     [bounds.getSouth(), bounds.getEast()]
   ];
 
+// Retrieve scaled hexes for viewport
   const hexes = h3.polygonToCells(bboxPolygon, H3_RESOLUTION);
+
+  // Performance Guard: Skip rendering if zoomed out too far with too many cells
+  if (hexes.length > 600) return;
 
   hexes.forEach(hexIndex => {
     const boundary = h3.cellToBoundary(hexIndex);
@@ -213,6 +236,8 @@ function executeStrike(weaponType) {
   resetMenus();
   renderBoardUnits();
 }
+
+
 
 // Map Event Listeners
 map.on('moveend', renderHexGrid);
