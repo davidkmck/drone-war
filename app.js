@@ -49,18 +49,15 @@ function getH3Resolution(zoom) {
   return 4;                 // Global/Theater view (~1,700 km² per hex)
 }
 
-
 // Fetch Airfields & Military Bases from Overpass API
 async function loadStrategicLandmarks() {
   militaryLandmarksGroup.clearLayers();
   
-  // Allow loading from Zoom Level 6 and higher for large regional views
   if (map.getZoom() < 6) return; 
 
   const bounds = map.getBounds();
   const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
-  // Broadened Overpass Query
   const query = `
     [out:json][timeout:15];
     (
@@ -73,63 +70,60 @@ async function loadStrategicLandmarks() {
     out center tags;
   `;
 
-      // Primary & Backup Overpass Endpoints
-    const OVERPASS_ENDPOINTS = [
-      'https://overpass-api.de/api/interpreter',
-      'https://overpass.kumi.systems/api/interpreter'
-    ];
+  const OVERPASS_ENDPOINTS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter'
+  ];
 
-  async function fetchOverpassData(query) {
-    for (const url of OVERPASS_ENDPOINTS) {
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          body: 'data=' + encodeURIComponent(query)
-        });
-        if (res.ok) return await res.json();
-      } catch (e) {
-        console.warn(`Failed fetching from ${url}, trying next endpoint...`);
+  let data = null;
+
+  // Attempt each endpoint until one returns valid JSON
+  for (const url of OVERPASS_ENDPOINTS) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query)
+      });
+      if (res.ok) {
+        data = await res.json();
+        break;
       }
+    } catch (e) {
+      console.warn(`Failed fetching from ${url}, trying next endpoint...`);
     }
-    return null;
   }
-  
-  try {
-    const data = await fetchOverpassData(query);
-    if (!data) {
-      console.warn("Could not retrieve landmark data from any Overpass endpoint.");
-      return;
-    }
-    
-    console.log(`Loaded ${data.elements.length} military/aviation landmarks.`);
 
-    data.elements.forEach(elem => {
-      const lat = elem.lat || (elem.center && elem.center.lat);
-      const lon = elem.lon || (elem.center && elem.center.lon);
-      if (!lat || !lon) return;
+  if (!data || !data.elements) {
+    console.warn("Could not retrieve landmark data from any Overpass endpoint.");
+    return;
+  }
 
-      const tags = elem.tags || {};
-      const name = tags.name || tags['name:en'] || tags.military || tags.aeroway || 'Strategic Site';
-      const isAirfield = tags.aeroway === 'aerodrome' || tags.aeroway === 'helipad' || tags.military === 'airfield' || tags.military === 'air_base';
+  console.log(`Loaded ${data.elements.length} military/aviation landmarks.`);
 
-      const icon = L.divIcon({
-        className: 'landmark-marker',
-        html: isAirfield ? '🛫' : '🪖',
-        iconSize: [24, 24]
-      });
+  data.elements.forEach(elem => {
+    const lat = elem.lat || (elem.center && elem.center.lat);
+    const lon = elem.lon || (elem.center && elem.center.lon);
+    if (!lat || !lon) return;
 
-      // Bind tooltip and make sure marker interacts properly
-      const marker = L.marker([lat, lon], { icon }).bindTooltip(name, { 
-        permanent: false, 
-        direction: 'top' 
-      });
+    const tags = elem.tags || {};
+    const name = tags.name || tags['name:en'] || tags.military || tags.aeroway || 'Strategic Site';
+    const isAirfield = tags.aeroway === 'aerodrome' || tags.aeroway === 'helipad' || tags.military === 'airfield' || tags.military === 'air_base';
 
-      militaryLandmarksGroup.addLayer(marker);
+    const icon = L.divIcon({
+      className: 'landmark-marker',
+      html: isAirfield ? '🛫' : '🪖',
+      iconSize: [24, 24]
     });
-  } catch (err) {
-    console.warn("Could not load strategic landmarks:", err);
-  }
+
+    const marker = L.marker([lat, lon], { icon }).bindTooltip(name, { 
+      permanent: false, 
+      direction: 'top' 
+    });
+
+    militaryLandmarksGroup.addLayer(marker);
+  });
 }
+
 
 // Render Map Grid Overlay
 function renderHexGrid() {
