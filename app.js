@@ -19,6 +19,17 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
   maxZoom: 18
 }).addTo(map);
 
+// Secondary Overlay Layer for Borders & City Labels
+const bordersAndLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+  attribution: 'Labels &copy; Esri',
+  maxZoom: 18,
+  pane: 'overlayPane' // Ensures labels render above the satellite layer
+}).addTo(map);
+
+// Layer group to hold strategic landmark markers
+const militaryLandmarksGroup = L.layerGroup().addTo(map);
+
+
 const hexLayerGroup = L.layerGroup().addTo(map);
 const unitLayerGroup = L.layerGroup().addTo(map);
 const H3_RESOLUTION = 8; // Hexagon resolution scale (~0.7 km² area per hex)
@@ -36,6 +47,58 @@ function getH3Resolution(zoom) {
   if (zoom >= 9)  return 6; // Regional scale (~36 km² per hex)
   if (zoom >= 7)  return 5; // Strategic scale (~250 km² per hex)
   return 4;                 // Global/Theater view (~1,700 km² per hex)
+}
+
+
+// Fetch Airfields & Military Bases from Overpass API
+async function loadStrategicLandmarks() {
+  militaryLandmarksGroup.clearLayers();
+  
+  if (map.getZoom() < 8) return; // Only load when zoomed in enough to avoid API overload
+
+  const bounds = map.getBounds();
+  const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+
+  const query = `
+    [out:json][timeout:5];
+    (
+      node["military"="airfield"](${bbox});
+      way["military"="airfield"](${bbox});
+      node["landuse"="military"](${bbox});
+      way["landuse"="military"](${bbox});
+      node["aeroway"="aerodrome"](${bbox});
+    );
+    out center tags;
+  `;
+
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query)
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    data.elements.forEach(elem => {
+      const lat = elem.lat || (elem.center && elem.center.lat);
+      const lon = elem.lon || (elem.center && elem.center.lon);
+      if (!lat || !lon) return;
+
+      const name = elem.tags.name || elem.tags.military || 'Strategic Base';
+      const isAirfield = elem.tags.aeroway === 'aerodrome' || elem.tags.military === 'airfield';
+
+      const icon = L.divIcon({
+        className: 'landmark-marker',
+        html: isAirfield ? '🛫' : '🪖',
+        iconSize: [20, 20]
+      });
+
+      const marker = L.marker([lat, lon], { icon }).bindTooltip(name, { permanent: false });
+      militaryLandmarksGroup.addLayer(marker);
+    });
+  } catch (err) {
+    console.warn("Could not load strategic landmarks:", err);
+  }
 }
 
 // Render Map Grid Overlay
@@ -242,6 +305,20 @@ function executeStrike(weaponType) {
 // Map Event Listeners
 map.on('moveend', renderHexGrid);
 renderHexGrid();
+
+// Refresh landmarks on pan/zoom
+map.on('moveend', loadStrategicLandmarks);
+
+// Toggle handler for HTML checkbox controls
+function toggleLayer(layerType) {
+  if (layerType === 'borders') {
+    map.hasLayer(bordersAndLabels) ? map.removeLayer(bordersAndLabels) : map.addLayer(bordersAndLabels);
+  } else if (layerType === 'military') {
+    map.hasLayer(militaryLandmarksGroup) ? map.removeLayer(militaryLandmarksGroup) : map.addLayer(militaryLandmarksGroup);
+  }
+}
+
+window.toggleLayer = toggleLayer;
 
 // Expose UI handlers globally for inline HTML onclick attributes
 window.showActionPanel = showActionPanel;
