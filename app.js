@@ -49,9 +49,10 @@ function getH3Resolution(zoom) {
   return 4;                 // Global/Theater view (~1,700 km² per hex)
 }
 
-// Fetch Airfields & Military Bases for Ukraine & Russia from Overpass API
+// Fetch Airfields & Military Bases from Overpass API (Capped at 10)
 async function loadStrategicLandmarks() {
-  if (map.getZoom() < 6) {
+  // Require at least zoom level 8 so landmarks only show when zoomed in closely
+  if (map.getZoom() < 8) {
     militaryLandmarksGroup.clearLayers();
     return; 
   }
@@ -59,16 +60,16 @@ async function loadStrategicLandmarks() {
   const bounds = map.getBounds();
   const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
-  // Lightweight Bounding Box Query
+  // Overpass Query with strict [max:10] cap
   const query = `
-    [out:json][timeout:10];
+    [out:json][timeout:10][max:10];
     (
       node["military"~"airfield|base|installation|barracks|air_base"](${bbox});
       way["military"~"airfield|base|installation|barracks|air_base"](${bbox});
       node["aeroway"~"aerodrome|helipad|airfield"](${bbox});
       way["aeroway"~"aerodrome|helipad|airfield"](${bbox});
     );
-    out center tags;
+    out center tags 10;
   `;
 
   const OVERPASS_ENDPOINTS = [
@@ -102,29 +103,20 @@ async function loadStrategicLandmarks() {
   }
 
   if (!data || !data.elements) {
-    console.warn("Could not retrieve regional landmark data.");
     return;
   }
 
-  // Clear previous markers only AFTER successfully receiving data
   militaryLandmarksGroup.clearLayers();
 
-  // Country filtering list
-  const ALLOWED_COUNTRIES = ['UA', 'RU', 'UA-43', 'RU-SAR']; // Ukraine, Russia, Crimea, Saratov (Engels)
+  // Limit rendering explicitly to a maximum of 10 elements
+  const landmarksToRender = data.elements.slice(0, 10);
 
-  let loadedCount = 0;
-
-  data.elements.forEach(elem => {
+  landmarksToRender.forEach(elem => {
     const lat = elem.lat || (elem.center && elem.center.lat);
     const lon = elem.lon || (elem.center && elem.center.lon);
     if (!lat || !lon) return;
 
     const tags = elem.tags || {};
-    
-    // Optional client-side country check if tag exists
-    const countryTag = tags['ISO3166-1'] || tags['addr:country'];
-    if (countryTag && !ALLOWED_COUNTRIES.includes(countryTag)) return;
-
     const name = tags.name || tags['name:en'] || tags.military || tags.aeroway || 'Strategic Site';
     const isAirfield = tags.aeroway === 'aerodrome' || tags.aeroway === 'helipad' || tags.military === 'airfield' || tags.military === 'air_base';
 
@@ -140,10 +132,9 @@ async function loadStrategicLandmarks() {
     });
 
     militaryLandmarksGroup.addLayer(marker);
-    loadedCount++;
   });
 
-  console.log(`Successfully rendered ${loadedCount} military/aviation landmarks.`);
+  console.log(`Rendered ${landmarksToRender.length} strategic landmarks (max 10 limit).`);
 }
 
 
