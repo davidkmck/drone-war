@@ -43,10 +43,24 @@ function renderHexGrid() {
     // Touch & Click Interaction
     polygon.on('click', function() {
       document.getElementById('selected-hex').innerText = hexIndex;
+
+      // Get hex centroid lat/lng
+      const [lat, lng] = h3.cellToLatLng(hexIndex);
       
       // Clear previous selection and highlight active hex
       hexLayerGroup.eachLayer(layer => layer.setStyle({ fillColor: 'transparent' }));
       polygon.setStyle({ fillColor: '#38bdf8', fillOpacity: 0.4 });
+
+      // Classify Terrain
+      document.getElementById('selected-hex').innerText = `${hexIndex} (Analyzing...)`;
+      const terrain = await classifyHexTerrain(lat, lng);
+      
+      document.getElementById('selected-hex').innerHTML = `
+        <strong>ID:</strong> ${hexIndex.substring(0, 8)}...<br/>
+        <strong>Type:</strong> ${terrain.name}<br/>
+        <strong>Move Cost:</strong> ${terrain.moveCost}<br/>
+        <strong>Defense Bonus:</strong> +${terrain.defBonus * 100}%
+      `;
     });
 
     hexLayerGroup.addLayer(polygon);
