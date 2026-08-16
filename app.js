@@ -217,3 +217,12 @@ function executeStrike(weaponType) {
 // Map Event Listeners
 map.on('moveend', renderHexGrid);
 renderHexGrid();
+
+// Expose UI handlers globally for inline HTML onclick attributes
+window.showActionPanel = showActionPanel;
+window.resetMenus = resetMenus;
+window.showDeployMenu = showDeployMenu;
+window.showStrikeMenu = showStrikeMenu;
+window.executeDeploy = executeDeploy;
+window.executeStrike = executeStrike;
+
