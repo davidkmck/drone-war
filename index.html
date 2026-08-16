@@ -7,27 +7,8 @@
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  
-  <style>
-    body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; }
-    #map { height: 100vh; width: 100vw; background: #000; }
-    
-    /* Mobile HUD Overlay */
-    .hud-panel {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      background: rgba(15, 23, 42, 0.85);
-      color: #f8fafc;
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-family: system-ui, sans-serif;
-      font-size: 14px;
-      border: 1px solid rgba(255,255,255,0.1);
-      backdrop-filter: blur(4px);
-    }
-  </style>
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
@@ -38,73 +19,11 @@
 
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
+  <!-- External Libraries -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Uber H3 JS -->
   <script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.js"></script>
-
-  <script>
-    // 1. Initialize Leaflet map with Satellite Imagery
-    const initialCoords = [45.8150, 15.9819]; // Default coordinates (e.g., Zagreb / European terrain)
-    const map = L.map('map', {
-      center: initialCoords,
-      zoom: 13,
-      zoomControl: false // Minimalist UI for mobile
-    });
-
-    // Esri World Imagery (Free Satellite Layer)
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      attribution: 'Tiles &copy; Esri',
-      maxZoom: 18
-    }).addTo(map);
-
-    let hexLayerGroup = L.layerGroup().addTo(map);
-    const H3_RESOLUTION = 8; // Adjust resolution: 7 (~5km²), 8 (~0.7km²), 9 (~0.1km²)
-
-    // 2. Generate Hex Overlay for current viewport
-    function renderHexGrid() {
-      hexLayerGroup.clearLayers();
-      
-      const bounds = map.getBounds();
-      // Define viewport bounding box polygon for H3 lookup
-      const bboxPolygon = [
-        [bounds.getSouth(), bounds.getWest()],
-        [bounds.getNorth(), bounds.getWest()],
-        [bounds.getNorth(), bounds.getEast()],
-        [bounds.getSouth(), bounds.getEast()]
-      ];
-
-      // Get H3 hex indexes covering the current screen
-      const hexes = h3.polygonToCells(bboxPolygon, H3_RESOLUTION);
-
-      hexes.forEach(hexIndex => {
-        // Get boundary coordinates for each hex
-        const boundary = h3.cellToBoundary(hexIndex);
-        
-        // Draw Hexagon on Leaflet
-        const polygon = L.polygon(boundary, {
-          color: 'rgba(255, 255, 255, 0.35)',
-          weight: 1,
-          fillColor: 'transparent',
-          fillOpacity: 0.1
-        });
-
-        // Touch / Click Handler
-        polygon.on('click', function() {
-          document.getElementById('selected-hex').innerText = hexIndex;
-          
-          // Highlight selected hex
-          hexLayerGroup.eachLayer(layer => layer.setStyle({ fillColor: 'transparent' }));
-          polygon.setStyle({ fillColor: '#38bdf8', fillOpacity: 0.4 });
-        });
-
-        hexLayerGroup.addLayer(polygon);
-      });
-    }
-
-    // Render initially & update on map pan/zoom
-    map.on('moveend', renderHexGrid);
-    renderHexGrid();
-  </script>
+  
+  <!-- Main Application Script -->
+  <script src="app.js"></script>
 </body>
 </html>
