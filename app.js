@@ -151,6 +151,60 @@ function renderHexGrid() {
   });
 }
 
+let currentTargetHex = null;
+
+// Show primary action buttons when a hex is clicked
+function showActionPanel(hexIndex) {
+  currentTargetHex = hexIndex;
+  resetMenus();
+  document.getElementById('action-panel').classList.remove('hidden');
+}
+
+function resetMenus() {
+  document.getElementById('action-panel').classList.add('hidden');
+  document.getElementById('deploy-menu').classList.add('hidden');
+  document.getElementById('strike-menu').classList.add('hidden');
+}
+
+function showDeployMenu() {
+  document.getElementById('action-panel').classList.add('hidden');
+  document.getElementById('deploy-menu').classList.remove('hidden');
+}
+
+function showStrikeMenu() {
+  document.getElementById('action-panel').classList.add('hidden');
+  document.getElementById('strike-menu').classList.remove('hidden');
+}
+
+// Deploy Unit Action
+function executeDeploy(unitKey) {
+  if (!currentTargetHex) return;
+
+  const unit = spawnUnit(currentTargetHex, unitKey, 'Player_1', activeBoardState);
+  alert(`Deployed ${unitKey} to hex ${currentTargetHex.substring(0, 8)}...`);
+  
+  resetMenus();
+  renderBoardUnits(); // Refresh markers on map
+}
+
+// Execute Long-Range Strike
+function executeStrike(weaponType) {
+  if (!currentTargetHex) return;
+
+  const targetHexData = activeBoardState[currentTargetHex];
+  
+  if (targetHexData && targetHexData.units && targetHexData.units.length > 0) {
+    // Destroy top unit on hex
+    const destroyedUnit = targetHexData.units.pop();
+    alert(`💥 STRIKE CONFIRMED! ${weaponType} destroyed ${destroyedUnit.type} on target hex.`);
+  } else {
+    alert(`🚀 ${weaponType} struck hex ${currentTargetHex.substring(0, 8)}... No units detected.`);
+  }
+
+  resetMenus();
+  renderBoardUnits();
+}
+
 // Event Listeners for map rendering
 map.on('moveend', renderHexGrid);
 renderHexGrid();
