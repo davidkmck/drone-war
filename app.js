@@ -301,13 +301,16 @@ function executeStrike(weaponType) {
 }
 
 
-
 // Map Event Listeners
-map.on('moveend', renderHexGrid);
-renderHexGrid();
+map.on('moveend', () => {
+  renderHexGrid();
+  loadStrategicLandmarks();
+});
 
-// Refresh landmarks on pan/zoom
-map.on('moveend', loadStrategicLandmarks);
+// Initial load executions
+renderHexGrid();
+loadStrategicLandmarks();
+
 
 // Toggle handler for HTML checkbox controls
 function toggleLayer(layerType) {
