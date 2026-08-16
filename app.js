@@ -49,7 +49,7 @@ function getH3Resolution(zoom) {
   return 4;                 // Global/Theater view (~1,700 km² per hex)
 }
 
-// Fetch Airfields & Military Bases strictly for Ukraine & Russia from Overpass API
+// Fetch Airfields & Military Bases for Ukraine & Russia from Overpass API
 async function loadStrategicLandmarks() {
   if (map.getZoom() < 6) {
     militaryLandmarksGroup.clearLayers();
@@ -59,21 +59,14 @@ async function loadStrategicLandmarks() {
   const bounds = map.getBounds();
   const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
-  // Overpass Query filtered strictly by Ukraine (UA) and Russia (RU) national boundaries
+  // Lightweight Bounding Box Query
   const query = `
-    [out:json][timeout:12];
-    area["ISO3166-1"="UA"]->.ua;
-    area["ISO3166-1"="RU"]->.ru;
+    [out:json][timeout:10];
     (
-      node["military"~"airfield|base|installation|barracks|air_base"](${bbox})(area.ua);
-      way["military"~"airfield|base|installation|barracks|air_base"](${bbox})(area.ua);
-      node["aeroway"~"aerodrome|helipad|airfield"](${bbox})(area.ua);
-      way["aeroway"~"aerodrome|helipad|airfield"](${bbox})(area.ua);
-
-      node["military"~"airfield|base|installation|barracks|air_base"](${bbox})(area.ru);
-      way["military"~"airfield|base|installation|barracks|air_base"](${bbox})(area.ru);
-      node["aeroway"~"aerodrome|helipad|airfield"](${bbox})(area.ru);
-      way["aeroway"~"aerodrome|helipad|airfield"](${bbox})(area.ru);
+      node["military"~"airfield|base|installation|barracks|air_base"](${bbox});
+      way["military"~"airfield|base|installation|barracks|air_base"](${bbox});
+      node["aeroway"~"aerodrome|helipad|airfield"](${bbox});
+      way["aeroway"~"aerodrome|helipad|airfield"](${bbox});
     );
     out center tags;
   `;
@@ -88,7 +81,7 @@ async function loadStrategicLandmarks() {
 
   for (const url of OVERPASS_ENDPOINTS) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
     try {
       const res = await fetch(url, {
@@ -113,10 +106,13 @@ async function loadStrategicLandmarks() {
     return;
   }
 
-  // Clear previous markers only AFTER receiving valid filtered data
+  // Clear previous markers only AFTER successfully receiving data
   militaryLandmarksGroup.clearLayers();
 
-  console.log(`Loaded ${data.elements.length} military/aviation landmarks in UA/RU.`);
+  // Country filtering list
+  const ALLOWED_COUNTRIES = ['UA', 'RU', 'UA-43', 'RU-SAR']; // Ukraine, Russia, Crimea, Saratov (Engels)
+
+  let loadedCount = 0;
 
   data.elements.forEach(elem => {
     const lat = elem.lat || (elem.center && elem.center.lat);
@@ -124,6 +120,11 @@ async function loadStrategicLandmarks() {
     if (!lat || !lon) return;
 
     const tags = elem.tags || {};
+    
+    // Optional client-side country check if tag exists
+    const countryTag = tags['ISO3166-1'] || tags['addr:country'];
+    if (countryTag && !ALLOWED_COUNTRIES.includes(countryTag)) return;
+
     const name = tags.name || tags['name:en'] || tags.military || tags.aeroway || 'Strategic Site';
     const isAirfield = tags.aeroway === 'aerodrome' || tags.aeroway === 'helipad' || tags.military === 'airfield' || tags.military === 'air_base';
 
@@ -139,8 +140,12 @@ async function loadStrategicLandmarks() {
     });
 
     militaryLandmarksGroup.addLayer(marker);
+    loadedCount++;
   });
+
+  console.log(`Successfully rendered ${loadedCount} military/aviation landmarks.`);
 }
+
 
 // Render Map Grid Overlay
 function renderHexGrid() {
