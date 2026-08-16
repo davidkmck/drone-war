@@ -49,15 +49,12 @@ function getH3Resolution(zoom) {
   return 4;                 // Global/Theater view (~1,700 km² per hex)
 }
 
-// Render Strategic Landmarks from local dataset
+// Render Strategic Landmarks from local dataset (Max 24 at one time)
 function loadStrategicLandmarks() {
-  // Hide markers if zoomed out beyond regional scale
-  if (map.getZoom() < 6) {
-    militaryLandmarksGroup.clearLayers();
-    return;
-  }
+  militaryLandmarksGroup.clearLayers();
 
-  // Ensure STRATEGIC_LANDMARKS exists
+  if (map.getZoom() < 6) return;
+
   if (typeof STRATEGIC_LANDMARKS === 'undefined') {
     console.warn("STRATEGIC_LANDMARKS dataset not found.");
     return;
@@ -65,23 +62,26 @@ function loadStrategicLandmarks() {
 
   const bounds = map.getBounds();
 
-  // Filter landmarks that fall within current map viewport
+  // Filter all landmarks from landmarks.js that fall within current map viewport
   const visibleLandmarks = STRATEGIC_LANDMARKS.filter(site => {
     return bounds.contains([site.lat, site.lon]);
   });
 
-  // Limit rendering to a maximum of 10 landmarks on screen
-  const landmarksToRender = visibleLandmarks.slice(0, 10);
+  // Render limit cap: no more than 24 on screen at once
+  const landmarksToRender = visibleLandmarks.slice(0, 24);
 
-  // Prepare new markers first before clearing the group
   const newMarkers = [];
 
   landmarksToRender.forEach(site => {
-    const isAirfield = site.type === 'airfield';
+    // Categorized marker icons
+    let iconEmoji = '🪖'; // Default military base
+    if (site.type === 'airfield') iconEmoji = '🛫';
+    else if (site.type === 'intel') iconEmoji = '👁️';
+    else if (site.type === 'security') iconEmoji = '🛡️';
 
     const icon = L.divIcon({
       className: 'landmark-marker',
-      html: isAirfield ? '🛫' : '🪖',
+      html: iconEmoji,
       iconSize: [24, 24],
       iconAnchor: [12, 12]
     });
@@ -95,11 +95,10 @@ function loadStrategicLandmarks() {
     newMarkers.push(marker);
   });
 
-  // Atomic layer swap to prevent flickering
-  militaryLandmarksGroup.clearLayers();
+  // Add active view markers to map
   newMarkers.forEach(m => militaryLandmarksGroup.addLayer(m));
 
-  console.log(`Rendered ${newMarkers.length} strategic landmarks locally.`);
+  console.log(`Rendered ${newMarkers.length} strategic landmarks locally (24 viewport limit).`);
 }
 
 
