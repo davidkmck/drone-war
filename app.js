@@ -54,54 +54,76 @@ function getH3Resolution(zoom) {
 async function loadStrategicLandmarks() {
   militaryLandmarksGroup.clearLayers();
   
-  // Lower zoom threshold slightly to zoom level 7
-  if (map.getZoom() < 7) return; 
+  // Allow loading from Zoom Level 6 and higher for large regional views
+  if (map.getZoom() < 6) return; 
 
   const bounds = map.getBounds();
   const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
-  // Expanded query including military=base, installation, and barracks
+  // Broadened Overpass Query
   const query = `
-    [out:json][timeout:10];
+    [out:json][timeout:15];
     (
-      node["military"~"airfield|base|installation|barracks"](${bbox});
-      way["military"~"airfield|base|installation|barracks"](${bbox});
-      node["landuse"="military"](${bbox});
-      way["landuse"="military"](${bbox});
-      node["aeroway"~"aerodrome|helipad"](${bbox});
-      way["aeroway"~"aerodrome|helipad"](${bbox});
+      node["military"~"airfield|base|installation|barracks|air_base"](${bbox});
+      way["military"~"airfield|base|installation|barracks|air_base"](${bbox});
+      relation["military"~"airfield|base|installation|barracks|air_base"](${bbox});
+      node["aeroway"~"aerodrome|helipad|airfield"](${bbox});
+      way["aeroway"~"aerodrome|helipad|airfield"](${bbox});
     );
     out center tags;
   `;
 
+      // Primary & Backup Overpass Endpoints
+    const OVERPASS_ENDPOINTS = [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter'
+    ];
+
+  async function fetchOverpassData(query) {
+    for (const url of OVERPASS_ENDPOINTS) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          body: 'data=' + encodeURIComponent(query)
+        });
+        if (res.ok) return await res.json();
+      } catch (e) {
+        console.warn(`Failed fetching from ${url}, trying next endpoint...`);
+      }
+    }
+    return null;
+  }
+  
   try {
-    const res = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      body: 'data=' + encodeURIComponent(query)
-    });
-    if (!res.ok) {
-      console.warn(`Landmark fetch returned status: ${res.status}`);
+    const data = await fetchOverpassData(query);
+    if (!data) {
+      console.warn("Could not retrieve landmark data from any Overpass endpoint.");
       return;
     }
-
-    const data = await res.json();
-    console.log(`Found ${data.elements.length} strategic landmarks in viewport`); // Debug log
+    
+    console.log(`Loaded ${data.elements.length} military/aviation landmarks.`);
 
     data.elements.forEach(elem => {
       const lat = elem.lat || (elem.center && elem.center.lat);
       const lon = elem.lon || (elem.center && elem.center.lon);
       if (!lat || !lon) return;
 
-      const name = elem.tags.name || elem.tags.military || elem.tags.aeroway || 'Strategic Site';
-      const isAirfield = elem.tags.aeroway === 'aerodrome' || elem.tags.aeroway === 'helipad' || elem.tags.military === 'airfield';
+      const tags = elem.tags || {};
+      const name = tags.name || tags['name:en'] || tags.military || tags.aeroway || 'Strategic Site';
+      const isAirfield = tags.aeroway === 'aerodrome' || tags.aeroway === 'helipad' || tags.military === 'airfield' || tags.military === 'air_base';
 
       const icon = L.divIcon({
         className: 'landmark-marker',
         html: isAirfield ? '🛫' : '🪖',
-        iconSize: [20, 20]
+        iconSize: [24, 24]
       });
 
-      const marker = L.marker([lat, lon], { icon }).bindTooltip(name, { permanent: false });
+      // Bind tooltip and make sure marker interacts properly
+      const marker = L.marker([lat, lon], { icon }).bindTooltip(name, { 
+        permanent: false, 
+        direction: 'top' 
+      });
+
       militaryLandmarksGroup.addLayer(marker);
     });
   } catch (err) {
