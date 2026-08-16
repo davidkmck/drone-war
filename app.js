@@ -51,7 +51,7 @@ function getH3Resolution(zoom) {
 
 // Fetch Airfields & Military Bases from Overpass API
 async function loadStrategicLandmarks() {
-if (map.getZoom() < 6) {
+  if (map.getZoom() < 6) {
     militaryLandmarksGroup.clearLayers();
     return; 
   }
@@ -60,7 +60,7 @@ if (map.getZoom() < 6) {
   const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
   const query = `
-    [out:json][timeout:15];
+    [out:json][timeout:10];
     (
       node["military"~"airfield|base|installation|barracks|air_base"](${bbox});
       way["military"~"airfield|base|installation|barracks|air_base"](${bbox});
@@ -71,33 +71,46 @@ if (map.getZoom() < 6) {
     out center tags;
   `;
 
+  // Added additional high-availability public endpoints
   const OVERPASS_ENDPOINTS = [
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter'
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+    'https://overpass-api.de/api/interpreter'
   ];
 
   let data = null;
 
-  // Attempt each endpoint until one returns valid JSON
   for (const url of OVERPASS_ENDPOINTS) {
+    // Abort request after 4 seconds if endpoint hangs/times out
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
     try {
       const res = await fetch(url, {
         method: 'POST',
-        body: 'data=' + encodeURIComponent(query)
+        body: 'data=' + encodeURIComponent(query),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
       if (res.ok) {
         data = await res.json();
         break;
       }
     } catch (e) {
-      console.warn(`Failed fetching from ${url}, trying next endpoint...`);
+      clearTimeout(timeoutId);
+      console.warn(`Endpoint ${url} failed or timed out, switching...`);
     }
   }
 
+  // Preserve existing markers if network/endpoints fail completely
   if (!data || !data.elements) {
-    console.warn("Could not retrieve landmark data from any Overpass endpoint.");
+    console.warn("Could not retrieve landmark data from active endpoints.");
     return;
   }
+
+  // Clear previous markers only AFTER successful data payload retrieval
+  militaryLandmarksGroup.clearLayers();
 
   console.log(`Loaded ${data.elements.length} military/aviation landmarks.`);
 
