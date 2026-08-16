@@ -15,6 +15,32 @@
   <div class="hud-panel">
     <strong>Geo-Hex Tactics</strong><br/>
     Selected Hex: <span id="selected-hex">None</span>
+
+      <!-- Action Buttons Panel -->
+      <div id="action-panel" class="action-panel hidden">
+        <div class="panel-title">Hex Actions</div>
+        <div class="button-group">
+          <button class="btn btn-deploy" onclick="showDeployMenu()">Deploy Unit</button>
+          <button class="btn btn-strike" onclick="showStrikeMenu()">Long-Range Strike</button>
+        </div>
+      </div>
+    
+      <!-- Submenu for Unit Deployment -->
+      <div id="deploy-menu" class="action-panel hidden">
+        <div class="panel-title">Select Unit to Deploy</div>
+        <button class="btn" onclick="executeDeploy('INFANTRY')">🪖 Infantry ($100)</button>
+        <button class="btn" onclick="executeDeploy('INTERCEPTOR')">🛸 Interceptor Drone ($250)</button>
+        <button class="btn" onclick="executeDeploy('LOGISTICS_TRUCK')">🚚 Supply Truck ($200)</button>
+        <button class="btn btn-cancel" onclick="resetMenus()">Cancel</button>
+      </div>
+    
+      <!-- Submenu for Long-Range Strikes -->
+      <div id="strike-menu" class="action-panel hidden">
+        <div class="panel-title">Target Selected Hex</div>
+        <button class="btn" onclick="executeStrike('CHEAP_LR_DRONE')">🛩️ Cheap LR Drone ($400)</button>
+        <button class="btn" onclick="executeStrike('CRUISE_MISSILE')">🚀 Cruise Missile ($2000)</button>
+        <button class="btn btn-cancel" onclick="resetMenus()">Cancel</button>
+      </div>
   </div>
 
   <div id="map"></div>
