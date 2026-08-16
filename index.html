@@ -41,6 +41,11 @@
         <button class="btn" onclick="executeStrike('CRUISE_MISSILE')">🚀 Cruise Missile ($2000)</button>
         <button class="btn btn-cancel" onclick="resetMenus()">Cancel</button>
       </div>
+
+    <div class="layer-toggles">
+  <label><input type="checkbox" id="toggle-borders" checked onchange="toggleLayer('borders')"> Borders & Cities</label><br/>
+  <label><input type="checkbox" id="toggle-military" checked onchange="toggleLayer('military')"> Airfields & Bases</label>
+</div>
   </div>
 
   <div id="map"></div>
