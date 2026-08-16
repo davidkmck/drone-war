@@ -1,0 +1,37 @@
+{
+  "gameId": "match-9801",
+  "currentTurn": 12,
+  "activePlayer": "Player_1",
+  "resources": {
+    "Player_1": { "funds": 1400, "supplyThroughput": 45 },
+    "Player_2": { "funds": 850, "supplyThroughput": 20 }
+  },
+  "boardState": {
+    "881f1d4833fffff": {
+      "terrain": "URBAN",
+      "owner": "Player_1",
+      "landmark": "Rail_Hub_Alpha",
+      "units": [
+        {
+          "id": "u_01",
+          "type": "INTERCEPTOR_DRONE",
+          "hp": 100,
+          "ammo": 3
+        }
+      ]
+    },
+    "881f1d4835fffff": {
+      "terrain": "FOREST",
+      "owner": null,
+      "units": [
+        {
+          "id": "u_02",
+          "type": "MOBILE_LAUNCHER",
+          "owner": "Player_2",
+          "hp": 80,
+          "ammo": 1
+        }
+      ]
+    }
+  }
+}
