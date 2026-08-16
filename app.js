@@ -49,76 +49,25 @@ function getH3Resolution(zoom) {
   return 4;                 // Global/Theater view (~1,700 km² per hex)
 }
 
-// Fetch Airfields & Military Bases from Overpass API (Capped at 10)
-async function loadStrategicLandmarks() {
-  // Require at least zoom level 8 so landmarks only show when zoomed in closely
-  if (map.getZoom() < 8) {
-    militaryLandmarksGroup.clearLayers();
-    return; 
-  }
-
-  const bounds = map.getBounds();
-  const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
-
-  // Overpass Query with strict [max:10] cap
-  const query = `
-    [out:json][timeout:10][max:10];
-    (
-      node["military"~"airfield|base|installation|barracks|air_base"](${bbox});
-      way["military"~"airfield|base|installation|barracks|air_base"](${bbox});
-      node["aeroway"~"aerodrome|helipad|airfield"](${bbox});
-      way["aeroway"~"aerodrome|helipad|airfield"](${bbox});
-    );
-    out center tags 10;
-  `;
-
-  const OVERPASS_ENDPOINTS = [
-    'https://overpass.kumi.systems/api/interpreter',
-    'https://overpass.private.coffee/api/interpreter',
-    'https://overpass-api.de/api/interpreter'
-  ];
-
-  let data = null;
-
-  for (const url of OVERPASS_ENDPOINTS) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        body: 'data=' + encodeURIComponent(query),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        data = await res.json();
-        break;
-      }
-    } catch (e) {
-      clearTimeout(timeoutId);
-      console.warn(`Endpoint ${url} failed or timed out, switching...`);
-    }
-  }
-
-  if (!data || !data.elements) {
-    return;
-  }
-
+// Render Strategic Landmarks from local dataset
+function loadStrategicLandmarks() {
   militaryLandmarksGroup.clearLayers();
 
-  // Limit rendering explicitly to a maximum of 10 elements
-  const landmarksToRender = data.elements.slice(0, 10);
+  // Show landmarks only when zoomed in to level 6 or higher
+  if (map.getZoom() < 6) return;
 
-  landmarksToRender.forEach(elem => {
-    const lat = elem.lat || (elem.center && elem.center.lat);
-    const lon = elem.lon || (elem.center && elem.center.lon);
-    if (!lat || !lon) return;
+  const bounds = map.getBounds();
 
-    const tags = elem.tags || {};
-    const name = tags.name || tags['name:en'] || tags.military || tags.aeroway || 'Strategic Site';
-    const isAirfield = tags.aeroway === 'aerodrome' || tags.aeroway === 'helipad' || tags.military === 'airfield' || tags.military === 'air_base';
+  // Filter landmarks that fall within the current map viewport
+  const visibleLandmarks = STRATEGIC_LANDMARKS.filter(site => {
+    return bounds.contains([site.lat, site.lon]);
+  });
+
+  // Limit rendering to a max of 10 landmarks on screen
+  const landmarksToRender = visibleLandmarks.slice(0, 10);
+
+  landmarksToRender.forEach(site => {
+    const isAirfield = site.type === 'airfield';
 
     const icon = L.divIcon({
       className: 'landmark-marker',
@@ -126,16 +75,18 @@ async function loadStrategicLandmarks() {
       iconSize: [24, 24]
     });
 
-    const marker = L.marker([lat, lon], { icon }).bindTooltip(name, { 
-      permanent: false, 
-      direction: 'top' 
-    });
+    const marker = L.marker([site.lat, site.lon], { icon })
+      .bindTooltip(site.name, { 
+        permanent: false, 
+        direction: 'top' 
+      });
 
     militaryLandmarksGroup.addLayer(marker);
   });
 
-  console.log(`Rendered ${landmarksToRender.length} strategic landmarks (max 10 limit).`);
+  console.log(`Rendered ${landmarksToRender.length} strategic landmarks locally.`);
 }
+
 
 
 // Render Map Grid Overlay
