@@ -51,20 +51,30 @@ function getH3Resolution(zoom) {
 
 // Render Strategic Landmarks from local dataset
 function loadStrategicLandmarks() {
-  militaryLandmarksGroup.clearLayers();
+  // Hide markers if zoomed out beyond regional scale
+  if (map.getZoom() < 6) {
+    militaryLandmarksGroup.clearLayers();
+    return;
+  }
 
-  // Show landmarks only when zoomed in to level 6 or higher
-  if (map.getZoom() < 6) return;
+  // Ensure STRATEGIC_LANDMARKS exists
+  if (typeof STRATEGIC_LANDMARKS === 'undefined') {
+    console.warn("STRATEGIC_LANDMARKS dataset not found.");
+    return;
+  }
 
   const bounds = map.getBounds();
 
-  // Filter landmarks that fall within the current map viewport
+  // Filter landmarks that fall within current map viewport
   const visibleLandmarks = STRATEGIC_LANDMARKS.filter(site => {
     return bounds.contains([site.lat, site.lon]);
   });
 
-  // Limit rendering to a max of 10 landmarks on screen
+  // Limit rendering to a maximum of 10 landmarks on screen
   const landmarksToRender = visibleLandmarks.slice(0, 10);
+
+  // Prepare new markers first before clearing the group
+  const newMarkers = [];
 
   landmarksToRender.forEach(site => {
     const isAirfield = site.type === 'airfield';
@@ -72,7 +82,8 @@ function loadStrategicLandmarks() {
     const icon = L.divIcon({
       className: 'landmark-marker',
       html: isAirfield ? '🛫' : '🪖',
-      iconSize: [24, 24]
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
     });
 
     const marker = L.marker([site.lat, site.lon], { icon })
@@ -81,12 +92,15 @@ function loadStrategicLandmarks() {
         direction: 'top' 
       });
 
-    militaryLandmarksGroup.addLayer(marker);
+    newMarkers.push(marker);
   });
 
-  console.log(`Rendered ${landmarksToRender.length} strategic landmarks locally.`);
-}
+  // Atomic layer swap to prevent flickering
+  militaryLandmarksGroup.clearLayers();
+  newMarkers.forEach(m => militaryLandmarksGroup.addLayer(m));
 
+  console.log(`Rendered ${newMarkers.length} strategic landmarks locally.`);
+}
 
 
 // Render Map Grid Overlay
@@ -291,6 +305,12 @@ function executeStrike(weaponType) {
 
 // Map Event Listeners
 map.on('moveend', () => {
+  renderHexGrid();
+  loadStrategicLandmarks();
+});
+
+// Re-render when zoom changes
+map.on('zoomend', () => {
   renderHexGrid();
   loadStrategicLandmarks();
 });
