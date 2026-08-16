@@ -5,12 +5,12 @@ async function classifyHexTerrain(lat, lng) {
   // Query a 150m radius around the hex centroid using Overpass API
   const overpassUrl = 'https://overpass-api.de/api/interpreter';
   const query = `
-    [out:json][timeout:5];
+    [out:json][timeout:3];
     (
-      way(around:150, ${lat}, ${lng})["natural"];
-      way(around:150, ${lat}, ${lng})["landuse"];
-      way(around:150, ${lat}, ${lng})["building"];
-      way(around:150, ${lat}, ${lng})["waterway"];
+      way(around:100, ${lat}, ${lng})["natural"];
+      way(around:100, ${lat}, ${lng})["landuse"];
+      way(around:100, ${lat}, ${lng})["building"];
+      way(around:100, ${lat}, ${lng})["waterway"];
     );
     out tags;
   `;
@@ -20,13 +20,21 @@ async function classifyHexTerrain(lat, lng) {
       method: 'POST',
       body: 'data=' + encodeURIComponent(query)
     });
+
+    // Check if Overpass returned 200 OK before parsing JSON
+    if (!response.ok) {
+      console.warn(`Overpass API returned status ${response.status}. Falling back to Plains.`);
+      return TERRAIN_TYPES.PLAINS;
+    }
+
     const data = await response.json();
     return parseOsmData(data.elements);
   } catch (err) {
-    console.warn("Overpass API fallback to Plains:", err);
+    console.warn("Overpass API request failed. Falling back to Plains:", err);
     return TERRAIN_TYPES.PLAINS;
   }
 }
+    
 
 // Terrain Types & Combat Modifiers
 const TERRAIN_TYPES = {
