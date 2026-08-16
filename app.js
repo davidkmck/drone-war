@@ -1,15 +1,15 @@
-// Initialize Leaflet map with Satellite Imagery & Zoom Locks
-const initialCoords = [45.8150, 15.9819]; 
+// Initialize Leaflet map centered over Ukraine & Western Russia
+const initialCoords = [49.0, 34.0]; // Centered across Ukraine / Western RU border region
 const map = L.map('map', {
   center: initialCoords,
-  zoom: 13,
-  minZoom: 3,         // Prevents zooming out beyond the full world map
-  maxZoom: 18,        // Max satellite resolution
-  maxBounds: [       // Locks panning strictly to valid geographical coordinates
+  zoom: 6,            // Zoom level 6 fits all of Ukraine & Western Russia cleanly
+  minZoom: 3,
+  maxZoom: 18,
+  maxBounds: [
     [-90, -180],
     [90, 180]
   ],
-  maxBoundsViscosity: 1.0, // Hard boundary lock (prevents rubber-banding off the map)
+  maxBoundsViscosity: 1.0,
   zoomControl: false
 });
 
