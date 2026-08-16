@@ -13,79 +13,125 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
 }).addTo(map);
 
 const hexLayerGroup = L.layerGroup().addTo(map);
+const unitLayerGroup = L.layerGroup().addTo(map);
 const H3_RESOLUTION = 8; // Hexagon resolution scale (~0.7 km² area per hex)
 
-// State tracking variables
-let activeBoardState = {}; // Loaded from state.json or local memory
+// State Tracking Variables
+let activeBoardState = {}; 
 let selectedUnitHex = null;
 let validMoveHighlights = [];
+let currentTargetHex = null;
 
-// Highlight reachable hexes for selected unit
-function highlightValidMoves(originHex, moveRange) {
-  clearHighlights();
+// Render Map Grid Overlay
+function renderHexGrid() {
+  hexLayerGroup.clearLayers();
+  
+  const bounds = map.getBounds();
+  const bboxPolygon = [
+    [bounds.getSouth(), bounds.getWest()],
+    [bounds.getNorth(), bounds.getWest()],
+    [bounds.getNorth(), bounds.getEast()],
+    [bounds.getSouth(), bounds.getEast()]
+  ];
 
-  validMoveHighlights = getValidMoves(originHex, moveRange, activeBoardState);
+  const hexes = h3.polygonToCells(bboxPolygon, H3_RESOLUTION);
 
-  hexLayerGroup.eachLayer(layer => {
-    if (validMoveHighlights.includes(layer.hexIndex)) {
-      layer.setStyle({ fillColor: '#22c55e', fillOpacity: 0.4 }); // Green overlay for valid moves
+  hexes.forEach(hexIndex => {
+    const boundary = h3.cellToBoundary(hexIndex);
+    
+    const polygon = L.polygon(boundary, {
+      color: 'rgba(255, 255, 255, 0.35)',
+      weight: 1,
+      fillColor: 'transparent',
+      fillOpacity: 0.1
+    });
+
+    // Attach hex index directly to layer for highlighting
+    polygon.hexIndex = hexIndex;
+
+    // Tap/Click Interaction Logic
+    polygon.on('click', async function() {
+      const currentHex = hexIndex;
+
+      // 1. Execute Movement if destination hex was tapped
+      if (selectedUnitHex && validMoveHighlights.includes(currentHex)) {
+        moveUnit(selectedUnitHex, currentHex);
+        selectedUnitHex = null;
+        clearHighlights();
+        resetMenus();
+        renderBoardUnits();
+        return;
+      }
+
+      // 2. Select Unit if present on hex
+      const hexData = activeBoardState[currentHex];
+      if (hexData && hexData.units && hexData.units.length > 0) {
+        const unit = hexData.units[hexData.units.length - 1]; // Top unit
+        selectedUnitHex = currentHex;
+        
+        const unitStats = UNIT_TYPES[unit.type] || UNIT_TYPES.INFANTRY;
+        highlightValidMoves(currentHex, unitStats.moveRange);
+
+        document.getElementById('selected-hex').innerHTML = `
+          <strong>Selected:</strong> ${unitStats.name} ${unitStats.icon}<br/>
+          <strong>HP:</strong> ${unit.hp} | <strong>Ammo:</strong> ${unit.ammo}<br/>
+          <em>Tap highlighted hex to move</em>
+        `;
+
+        showActionPanel(currentHex);
+        return;
+      }
+
+      // 3. Inspect Open Hex & Fetch Terrain
+      selectedUnitHex = null;
+      clearHighlights();
+      polygon.setStyle({ fillColor: '#38bdf8', fillOpacity: 0.4 });
+      
+      document.getElementById('selected-hex').innerText = `${currentHex.substring(0, 8)}... (Analyzing...)`;
+      
+      const [lat, lng] = h3.cellToLatLng(currentHex);
+      const terrain = await classifyHexTerrain(lat, lng);
+      
+      document.getElementById('selected-hex').innerHTML = `
+        <strong>Hex:</strong> ${currentHex.substring(0, 8)}...<br/>
+        <strong>Terrain:</strong> ${terrain.name}<br/>
+        <strong>Move Cost:</strong> ${terrain.moveCost} | <strong>Defense:</strong> +${terrain.defBonus * 100}%
+      `;
+
+      showActionPanel(currentHex);
+    });
+
+    hexLayerGroup.addLayer(polygon);
+  });
+
+  renderBoardUnits();
+}
+
+// Draw Unit Icons on Map
+function renderBoardUnits() {
+  unitLayerGroup.clearLayers();
+
+  Object.keys(activeBoardState).forEach(hexIndex => {
+    const hexData = activeBoardState[hexIndex];
+    if (hexData.units && hexData.units.length > 0) {
+      const topUnit = hexData.units[hexData.units.length - 1];
+      const unitStats = UNIT_TYPES[topUnit.type] || { icon: '❓' };
+      const [lat, lng] = h3.cellToLatLng(hexIndex);
+
+      const icon = L.divIcon({
+        className: 'unit-marker',
+        html: unitStats.icon,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+
+      const marker = L.marker([lat, lng], { icon: icon, interactive: false });
+      unitLayerGroup.addLayer(marker);
     }
   });
 }
 
-function clearHighlights() {
-  hexLayerGroup.eachLayer(layer => {
-    layer.setStyle({ fillColor: 'transparent', fillOpacity: 0.1 });
-  });
-}
-
-// Updated Polygon Click Listener in app.js
-polygon.on('click', async function() {
-  const currentHex = hexIndex;
-
-  // 1. If tapping a highlighted move destination for a selected unit:
-  if (selectedUnitHex && validMoveHighlights.includes(currentHex)) {
-    moveUnit(selectedUnitHex, currentHex);
-    selectedUnitHex = null;
-    clearHighlights();
-    renderBoardUnits();
-    return;
-  }
-
-  // 2. Select unit present on tapped hex
-  const hexData = activeBoardState[currentHex];
-  if (hexData && hexData.units && hexData.units.length > 0) {
-    const unit = hexData.units[0];
-    selectedUnitHex = currentHex;
-    
-    // Get unit movement range stats
-    const unitStats = UNIT_TYPES[unit.type] || UNIT_TYPES.INFANTRY;
-    highlightValidMoves(currentHex, unitStats.moveRange);
-
-    document.getElementById('selected-hex').innerHTML = `
-      <strong>Selected:</strong> ${unitStats.name} ${unitStats.icon}<br/>
-      <strong>HP:</strong> ${unit.hp} | <strong>Ammo:</strong> ${unit.ammo}<br/>
-      <em>Tap green hex to move</em>
-    `;
-    return;
-  }
-
-  // 3. Fallback: Normal hex inspection & terrain lookup
-  selectedUnitHex = null;
-  clearHighlights();
-  polygon.setStyle({ fillColor: '#38bdf8', fillOpacity: 0.4 });
-  
-  const [lat, lng] = h3.cellToLatLng(currentHex);
-  const terrain = await classifyHexTerrain(lat, lng);
-  
-  document.getElementById('selected-hex').innerHTML = `
-    <strong>Hex:</strong> ${currentHex.substring(0, 8)}...<br/>
-    <strong>Terrain:</strong> ${terrain.name}<br/>
-    <strong>Move Cost:</strong> ${terrain.moveCost}
-  `;
-});
-
-// Move unit from source to destination hex
+// Move Unit Execution
 function moveUnit(fromHex, toHex) {
   if (!activeBoardState[fromHex] || !activeBoardState[fromHex].units.length) return;
 
@@ -99,61 +145,25 @@ function moveUnit(fromHex, toHex) {
   activeBoardState[toHex].units.push(unit);
 }
 
-// Generate Hex Overlay across current viewport bounds
-function renderHexGrid() {
-  hexLayerGroup.clearLayers();
-  
-  const bounds = map.getBounds();
-  const bboxPolygon = [
-    [bounds.getSouth(), bounds.getWest()],
-    [bounds.getNorth(), bounds.getWest()],
-    [bounds.getNorth(), bounds.getEast()],
-    [bounds.getSouth(), bounds.getEast()]
-  ];
+// Highlight Movement Targets
+function highlightValidMoves(originHex, moveRange) {
+  clearHighlights();
+  validMoveHighlights = getValidMoves(originHex, moveRange, activeBoardState);
 
-  // Retrieve H3 index cells covering the current viewport
-  const hexes = h3.polygonToCells(bboxPolygon, H3_RESOLUTION);
-
-  hexes.forEach(hexIndex => {
-    const boundary = h3.cellToBoundary(hexIndex);
-    
-    const polygon = L.polygon(boundary, {
-      color: 'rgba(255, 255, 255, 0.35)',
-      weight: 1,
-      fillColor: 'transparent',
-      fillOpacity: 0.1
-    });
-
-    // Touch & Click Interaction
-    polygon.on('click', function() {
-      document.getElementById('selected-hex').innerText = hexIndex;
-
-      // Get hex centroid lat/lng
-      const [lat, lng] = h3.cellToLatLng(hexIndex);
-      
-      // Clear previous selection and highlight active hex
-      hexLayerGroup.eachLayer(layer => layer.setStyle({ fillColor: 'transparent' }));
-      polygon.setStyle({ fillColor: '#38bdf8', fillOpacity: 0.4 });
-
-      // Classify Terrain
-      document.getElementById('selected-hex').innerText = `${hexIndex} (Analyzing...)`;
-      const terrain = await classifyHexTerrain(lat, lng);
-      
-      document.getElementById('selected-hex').innerHTML = `
-        <strong>ID:</strong> ${hexIndex.substring(0, 8)}...<br/>
-        <strong>Type:</strong> ${terrain.name}<br/>
-        <strong>Move Cost:</strong> ${terrain.moveCost}<br/>
-        <strong>Defense Bonus:</strong> +${terrain.defBonus * 100}%
-      `;
-    });
-
-    hexLayerGroup.addLayer(polygon);
+  hexLayerGroup.eachLayer(layer => {
+    if (validMoveHighlights.includes(layer.hexIndex)) {
+      layer.setStyle({ fillColor: '#22c55e', fillOpacity: 0.4 });
+    }
   });
 }
 
-let currentTargetHex = null;
+function clearHighlights() {
+  hexLayerGroup.eachLayer(layer => {
+    layer.setStyle({ fillColor: 'transparent', fillOpacity: 0.1 });
+  });
+}
 
-// Show primary action buttons when a hex is clicked
+// UI Menu Handlers
 function showActionPanel(hexIndex) {
   currentTargetHex = hexIndex;
   resetMenus();
@@ -180,11 +190,11 @@ function showStrikeMenu() {
 function executeDeploy(unitKey) {
   if (!currentTargetHex) return;
 
-  const unit = spawnUnit(currentTargetHex, unitKey, 'Player_1', activeBoardState);
+  spawnUnit(currentTargetHex, unitKey, 'Player_1', activeBoardState);
   alert(`Deployed ${unitKey} to hex ${currentTargetHex.substring(0, 8)}...`);
   
   resetMenus();
-  renderBoardUnits(); // Refresh markers on map
+  renderBoardUnits();
 }
 
 // Execute Long-Range Strike
@@ -194,7 +204,6 @@ function executeStrike(weaponType) {
   const targetHexData = activeBoardState[currentTargetHex];
   
   if (targetHexData && targetHexData.units && targetHexData.units.length > 0) {
-    // Destroy top unit on hex
     const destroyedUnit = targetHexData.units.pop();
     alert(`💥 STRIKE CONFIRMED! ${weaponType} destroyed ${destroyedUnit.type} on target hex.`);
   } else {
@@ -205,6 +214,6 @@ function executeStrike(weaponType) {
   renderBoardUnits();
 }
 
-// Event Listeners for map rendering
+// Map Event Listeners
 map.on('moveend', renderHexGrid);
 renderHexGrid();
