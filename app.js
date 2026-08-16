@@ -51,9 +51,10 @@ function getH3Resolution(zoom) {
 
 // Fetch Airfields & Military Bases from Overpass API
 async function loadStrategicLandmarks() {
-  militaryLandmarksGroup.clearLayers();
-  
-  if (map.getZoom() < 6) return; 
+if (map.getZoom() < 6) {
+    militaryLandmarksGroup.clearLayers();
+    return; 
+  }
 
   const bounds = map.getBounds();
   const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
