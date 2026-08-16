@@ -54,19 +54,22 @@ function getH3Resolution(zoom) {
 async function loadStrategicLandmarks() {
   militaryLandmarksGroup.clearLayers();
   
-  if (map.getZoom() < 8) return; // Only load when zoomed in enough to avoid API overload
+  // Lower zoom threshold slightly to zoom level 7
+  if (map.getZoom() < 7) return; 
 
   const bounds = map.getBounds();
   const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
+  // Expanded query including military=base, installation, and barracks
   const query = `
-    [out:json][timeout:5];
+    [out:json][timeout:10];
     (
-      node["military"="airfield"](${bbox});
-      way["military"="airfield"](${bbox});
+      node["military"~"airfield|base|installation|barracks"](${bbox});
+      way["military"~"airfield|base|installation|barracks"](${bbox});
       node["landuse"="military"](${bbox});
       way["landuse"="military"](${bbox});
-      node["aeroway"="aerodrome"](${bbox});
+      node["aeroway"~"aerodrome|helipad"](${bbox});
+      way["aeroway"~"aerodrome|helipad"](${bbox});
     );
     out center tags;
   `;
@@ -76,16 +79,21 @@ async function loadStrategicLandmarks() {
       method: 'POST',
       body: 'data=' + encodeURIComponent(query)
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      console.warn(`Landmark fetch returned status: ${res.status}`);
+      return;
+    }
 
     const data = await res.json();
+    console.log(`Found ${data.elements.length} strategic landmarks in viewport`); // Debug log
+
     data.elements.forEach(elem => {
       const lat = elem.lat || (elem.center && elem.center.lat);
       const lon = elem.lon || (elem.center && elem.center.lon);
       if (!lat || !lon) return;
 
-      const name = elem.tags.name || elem.tags.military || 'Strategic Base';
-      const isAirfield = elem.tags.aeroway === 'aerodrome' || elem.tags.military === 'airfield';
+      const name = elem.tags.name || elem.tags.military || elem.tags.aeroway || 'Strategic Site';
+      const isAirfield = elem.tags.aeroway === 'aerodrome' || elem.tags.aeroway === 'helipad' || elem.tags.military === 'airfield';
 
       const icon = L.divIcon({
         className: 'landmark-marker',
