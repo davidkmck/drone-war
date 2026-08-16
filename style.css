@@ -37,3 +37,60 @@ body, html {
   filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.8));
 }
 
+/* Action Panel & Buttons */
+.action-panel {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.panel-title {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.button-group {
+  display: flex;
+  gap: 6px;
+}
+
+.btn {
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: 4px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.btn:active {
+  background: #334155;
+}
+
+.btn-deploy {
+  background: #0d9488;
+  border-color: #14b8a6;
+}
+
+.btn-strike {
+  background: #b91c1c;
+  border-color: #ef4444;
+}
+
+.btn-cancel {
+  background: transparent;
+  border-color: #64748b;
+  color: #cbd5e1;
+}
+
